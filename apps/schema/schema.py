@@ -1,9 +1,15 @@
 import graphene
+from django.utils import timezone
 from graphene_django import DjangoObjectType
 
 from apps.users.models import User as UserModel
 from apps.decks.models import Deck as DeckModel
 from apps.cards.models import Card as CardModel
+
+
+def return_date_time(days: int):
+    now = timezone.now()
+    return now + timezone.timedelta(days=days)
 
 
 class User(DjangoObjectType):
@@ -35,6 +41,35 @@ class CreateCardMutaion(graphene.Mutation):
         return CreateCardMutaion(card=card)
 
 
+class UpdateCardMutation(graphene.Mutation):
+    card = graphene.Field(Card)
+    class Arguments:
+        id = graphene.ID()
+        deck = graphene.Int()
+        questoin = graphene.String()
+        answer = graphene.String()
+        bucket = graphene.Int()
+        next_review_at = graphene.DateTime()
+
+
+    def mutate(self,
+               info,
+               id,
+               deck,
+               question,
+               answer,
+               bucket,
+               next_review_at):
+        card: CardModel = CardModel.objects.get(id=id).\
+            select_related('deck')
+        card.deck = deck
+        card.question = question
+        card.answer = answer
+        card.bucket = bucket
+        card.next_review_at = return_date_time(next_review_at)
+        card.save()
+
+
 class CreateDeckMutaion(graphene.Mutation):
     deck = graphene.Field(Deck)
     class Arguments:
@@ -47,9 +82,30 @@ class CreateDeckMutaion(graphene.Mutation):
         return CreateDeckMutaion(deck=deck)
 
 
+class UpdateDeckMutation(graphene.Mutation):
+    deck = graphene.Field(Deck)
+    
+    class Arguments:
+        id = graphene.ID()
+        title = graphene.String()
+        description = graphene.String()
+    
+    def mutate(self, info, id, title=None, description=None):
+        try:
+            deck = DeckModel.objects.get(id=id)
+        except DeckModel.DoesNotExist as e:
+            raise e
+        if title:
+            deck.title = title
+        if description:
+            deck.description = description
+        deck.save()
+        return UpdateDeckMutation(deck=deck)
+
 class Mutation(graphene.ObjectType):
     create_card = CreateCardMutaion.Field()
-    create_deck = CreateDeckMutaion.Field()      
+    create_deck = CreateDeckMutaion.Field()
+    update_deck = UpdateDeckMutation.Field()   
 
 
 class Query(graphene.ObjectType):
